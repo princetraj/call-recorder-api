@@ -13,3 +13,38 @@ npm-debug.log
 yarn-error.log
 /.idea
 /.vscode
+
+# Composer
+composer.phar
+
+# Laravel
+/bootstrap/cache/*
+!/bootstrap/cache/.gitkeep
+/storage/framework/cache/*
+!/storage/framework/cache/.gitkeep
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitkeep
+/storage/framework/views/*
+!/storage/framework/views/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
+
+# Test files
+test_*.php
+check_devices.php
+monitor_device.php
+fix_controller.php
+update_controller.php
+complete_device_controller.php
+update_device_model.php
+reset_password.php
+reset_pw.php
+
+# Temporary files
+temp_migration.txt
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+NUL
