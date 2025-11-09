@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\wamp64\\bin\\mysql\\mysql9.1.0\\bin\\mysql.exe\" -u root -e \"CREATE DATABASE IF NOT EXISTS call_logs_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\")",
+      "Bash(\"C:\\wamp64\\bin\\mysql\\mysql9.1.0\\bin\\mysql.exe\" -u root -e \"SHOW DATABASES LIKE ''call_logs_db'';\")",
+      "Bash(php artisan db:show:*)",
+      "Bash(\"C:\\wamp64\\bin\\mysql\\mysql9.1.0\\bin\\mysql.exe\" -u root call_logs_db -e \"SHOW TABLES;\")",
+      "Bash(\"C:\\wamp64\\bin\\mysql\\mysql9.1.0\\bin\\mysql.exe\" -u root call_logs_db -e \"DESCRIBE users;\")",
+      "Bash(php artisan tinker:*)",
+      "Bash(php create_user.php:*)",
+      "Bash(\"C:\\wamp64\\bin\\mysql\\mysql9.1.0\\bin\\mysql.exe\" -u root call_logs_db -e \"SELECT id, name, email, role, status, created_at FROM users WHERE email = ''user@example.com'';\")",
+      "Bash(del:*)",
+      "Bash(rm:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,573 @@
+{
+	"info": {
+		"_postman_id": "call-logs-api-collection",
+		"name": "Call Logs API",
+		"description": "Complete API collection for Call Logs API with all endpoints and test payloads",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.success && jsonData.data.token) {",
+									"        pm.environment.set(\"auth_token\", jsonData.data.token);",
+									"        pm.environment.set(\"user_id\", jsonData.data.user.id);",
+									"        console.log(\"Token saved: \" + jsonData.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"login"
+							]
+						},
+						"description": "Authenticate user and receive API token"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"logout"
+							]
+						},
+						"description": "Logout and revoke current token"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Call Logs",
+			"item": [
+				{
+					"name": "Create Single Call Log",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"caller_name\": \"John Smith\",\n  \"caller_number\": \"+919876543210\",\n  \"call_type\": \"incoming\",\n  \"call_duration\": 125,\n  \"call_timestamp\": \"2024-11-02 14:30:00\",\n  \"notes\": \"Discussed project requirements\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/call-logs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							]
+						},
+						"description": "Create a single call log entry"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Outgoing Call Log",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"caller_name\": \"Jane Doe\",\n  \"caller_number\": \"+919876543211\",\n  \"call_type\": \"outgoing\",\n  \"call_duration\": 85,\n  \"call_timestamp\": \"2024-11-02 15:45:00\",\n  \"notes\": \"Follow-up call\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/call-logs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							]
+						},
+						"description": "Create outgoing call log"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Missed Call Log",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"caller_name\": \"Bob Wilson\",\n  \"caller_number\": \"+919876543212\",\n  \"call_type\": \"missed\",\n  \"call_duration\": 0,\n  \"call_timestamp\": \"2024-11-02 16:20:00\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/call-logs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							]
+						},
+						"description": "Create missed call log"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Rejected Call Log",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"caller_name\": \"Unknown Caller\",\n  \"caller_number\": \"+919876543213\",\n  \"call_type\": \"rejected\",\n  \"call_duration\": 0,\n  \"call_timestamp\": \"2024-11-02 17:10:00\",\n  \"notes\": \"Spam call\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/call-logs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							]
+						},
+						"description": "Create rejected call log"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Bulk Call Logs",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"call_logs\": [\n    {\n      \"caller_name\": \"Alice Cooper\",\n      \"caller_number\": \"+919876543214\",\n      \"call_type\": \"incoming\",\n      \"call_duration\": 180,\n      \"call_timestamp\": \"2024-11-02 10:00:00\",\n      \"notes\": \"Client call\"\n    },\n    {\n      \"caller_name\": \"Charlie Brown\",\n      \"caller_number\": \"+919876543215\",\n      \"call_type\": \"outgoing\",\n      \"call_duration\": 65,\n      \"call_timestamp\": \"2024-11-02 11:30:00\",\n      \"notes\": \"Quick update\"\n    },\n    {\n      \"caller_name\": \"Diana Prince\",\n      \"caller_number\": \"+919876543216\",\n      \"call_type\": \"incoming\",\n      \"call_duration\": 240,\n      \"call_timestamp\": \"2024-11-02 13:15:00\",\n      \"notes\": \"Long discussion\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/call-logs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							]
+						},
+						"description": "Create multiple call logs in one request"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Call Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/call-logs?page=1&per_page=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Get all call logs with pagination"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Call Logs - Filter by Type (Incoming)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/call-logs?call_type=incoming&per_page=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							],
+							"query": [
+								{
+									"key": "call_type",
+									"value": "incoming"
+								},
+								{
+									"key": "per_page",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Filter call logs by incoming calls"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Call Logs - Filter by Date Range",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/call-logs?date_from=2024-11-01&date_to=2024-11-02",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							],
+							"query": [
+								{
+									"key": "date_from",
+									"value": "2024-11-01"
+								},
+								{
+									"key": "date_to",
+									"value": "2024-11-02"
+								}
+							]
+						},
+						"description": "Filter call logs by date range"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Call Logs - Search",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/call-logs?search=John",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "John"
+								}
+							]
+						},
+						"description": "Search call logs by name or number"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Single Call Log",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/call-logs/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs",
+								"1"
+							]
+						},
+						"description": "Get a specific call log by ID"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Call Recordings",
+			"item": [
+				{
+					"name": "Upload Call Recording",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "call_log_id",
+									"value": "1",
+									"type": "text"
+								},
+								{
+									"key": "recording",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "duration",
+									"value": "125",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/call-recordings",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-recordings"
+							]
+						},
+						"description": "Upload an audio recording for a call log (select an MP3/WAV file)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Recordings for Call Log",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/call-logs/1/recordings",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-logs",
+								"1",
+								"recordings"
+							]
+						},
+						"description": "Get all recordings for a specific call log"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Recording",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/call-recordings/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"call-recordings",
+								"1"
+							]
+						},
+						"description": "Delete a specific recording"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000/api",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
