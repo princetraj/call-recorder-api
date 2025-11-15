@@ -67,6 +67,13 @@ class DeviceController extends Controller
             'app_running_status' => 'nullable|string|in:active,background,stopped',
             'current_call_status' => 'nullable|string|in:idle,in_call',
             'current_call_number' => 'nullable|string|max:20',
+            'permissions' => 'nullable|array',
+            'permissions.read_call_log' => 'nullable|boolean',
+            'permissions.read_phone_state' => 'nullable|boolean',
+            'permissions.read_contacts' => 'nullable|boolean',
+            'permissions.read_external_storage' => 'nullable|boolean',
+            'permissions.read_media_audio' => 'nullable|boolean',
+            'permissions.post_notifications' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -92,7 +99,8 @@ class DeviceController extends Controller
             // Check if device should logout
             $shouldLogout = $device->should_logout;
 
-            $device->update([
+            // Prepare update data
+            $updateData = [
                 'connection_type' => $request->connection_type ?? $device->connection_type,
                 'battery_percentage' => $request->battery_percentage ?? $device->battery_percentage,
                 'signal_strength' => $request->signal_strength ?? $device->signal_strength,
@@ -103,7 +111,20 @@ class DeviceController extends Controller
                 'call_started_at' => $request->current_call_status && $request->current_call_status !== 'idle' ? ($device->current_call_status === 'idle' ? now() : $device->call_started_at) : null,
                 'last_updated_at' => now(),
                 'should_logout' => false, // Clear the logout flag after sending it to device
-            ]);
+            ];
+
+            // Add permission data if provided
+            if ($request->has('permissions')) {
+                $permissions = $request->input('permissions');
+                $updateData['perm_read_call_log'] = $permissions['read_call_log'] ?? $device->perm_read_call_log;
+                $updateData['perm_read_phone_state'] = $permissions['read_phone_state'] ?? $device->perm_read_phone_state;
+                $updateData['perm_read_contacts'] = $permissions['read_contacts'] ?? $device->perm_read_contacts;
+                $updateData['perm_read_external_storage'] = $permissions['read_external_storage'] ?? $device->perm_read_external_storage;
+                $updateData['perm_read_media_audio'] = $permissions['read_media_audio'] ?? $device->perm_read_media_audio;
+                $updateData['perm_post_notifications'] = $permissions['post_notifications'] ?? $device->perm_post_notifications;
+            }
+
+            $device->update($updateData);
 
             return response()->json([
                 'success' => true,
@@ -153,6 +174,14 @@ class DeviceController extends Controller
                     'manufacturer' => $device->manufacturer,
                     'os_version' => $device->os_version,
                     'app_version' => $device->app_version,
+                    'permissions' => [
+                        'read_call_log' => $device->perm_read_call_log,
+                        'read_phone_state' => $device->perm_read_phone_state,
+                        'read_contacts' => $device->perm_read_contacts,
+                        'read_external_storage' => $device->perm_read_external_storage,
+                        'read_media_audio' => $device->perm_read_media_audio,
+                        'post_notifications' => $device->perm_post_notifications,
+                    ],
                     'connection_type' => $device->connection_type,
                     'battery_percentage' => $device->battery_percentage,
                     'signal_strength' => $device->signal_strength,
@@ -208,6 +237,14 @@ class DeviceController extends Controller
                     'manufacturer' => $device->manufacturer,
                     'os_version' => $device->os_version,
                     'app_version' => $device->app_version,
+                    'permissions' => [
+                        'read_call_log' => $device->perm_read_call_log,
+                        'read_phone_state' => $device->perm_read_phone_state,
+                        'read_contacts' => $device->perm_read_contacts,
+                        'read_external_storage' => $device->perm_read_external_storage,
+                        'read_media_audio' => $device->perm_read_media_audio,
+                        'post_notifications' => $device->perm_post_notifications,
+                    ],
                     'connection_type' => $device->connection_type,
                     'battery_percentage' => $device->battery_percentage,
                     'signal_strength' => $device->signal_strength,
@@ -236,7 +273,13 @@ class DeviceController extends Controller
     public function destroy($id)
     {
         try {
-            $device = Device::findOrFail($id);
+            $device = Device::with('user')->findOrFail($id);
+
+            // Clear the user's active device ID if it matches this device
+            if ($device->user && $device->user->active_device_id === $device->device_id) {
+                $device->user->update(['active_device_id' => null]);
+            }
+
             $device->delete();
 
             return response()->json([
@@ -255,7 +298,12 @@ class DeviceController extends Controller
     public function logout($id)
     {
         try {
-            $device = Device::findOrFail($id);
+            $device = Device::with('user')->findOrFail($id);
+
+            // Clear the user's active device ID if it matches this device
+            if ($device->user && $device->user->active_device_id === $device->device_id) {
+                $device->user->update(['active_device_id' => null]);
+            }
 
             // Mark device as logged out by setting a special flag
             $device->update([

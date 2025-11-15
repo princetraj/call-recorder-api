@@ -37,6 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Call logs routes
     Route::get('/call-logs', [CallLogController::class, 'index']);
+    Route::get('/call-logs/statistics', [CallLogController::class, 'statistics']);
     Route::post('/call-logs', [CallLogController::class, 'store']);
     Route::get('/call-logs/{id}', [CallLogController::class, 'show']);
 

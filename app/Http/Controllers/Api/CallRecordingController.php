@@ -17,9 +17,9 @@ class CallRecordingController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'call_log_id' => 'required|exists:call_logs,id',
-            'recording' => 'required|file|mimes:mp3,wav,m4a,3gp|max:51200', // max 50MB
+            'recording' => 'required|file|mimetypes:audio/*,video/mp4,application/octet-stream|max:51200', // max 50MB - Accept any audio file
             'duration' => 'nullable|integer|min:0',
         ]);
 

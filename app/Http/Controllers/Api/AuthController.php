@@ -20,11 +20,12 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|integer',
+            'username' => 'required|string',
             'password' => 'required|string|min:6',
+            'device_id' => 'nullable|string',
         ]);
 
-        $user = User::with('branch')->where('id', $request->user_id)->first();
+        $user = User::with('branch')->where('username', $request->username)->first();
 
         // Log failed login attempt if user not found or password incorrect
         if (!$user || !Hash::check($request->password, $user->password)) {
@@ -68,6 +69,30 @@ class AuthController extends Controller
             ], 403);
         }
 
+        // Check if user is already logged in on another device
+        if ($user->active_device_id && $user->active_device_id !== $request->input('device_id')) {
+            UserLoginActivity::create([
+                'user_id' => $user->id,
+                'user_type' => 'user',
+                'email' => $user->email,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'device_name' => $request->input('device_name'),
+                'device_id' => $request->input('device_id'),
+                'status' => 'failed',
+                'failure_reason' => 'User already logged in on another device',
+                'login_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'User already logged in on another device. Please contact admin to logout from other device.',
+            ], 403);
+        }
+
+        // Update user's active device ID
+        $user->update(['active_device_id' => $request->input('device_id')]);
+
         $token = $user->createToken('api-token')->plainTextToken;
 
         // Log successful login attempt
@@ -90,6 +115,7 @@ class AuthController extends Controller
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
+                    'username' => $user->username,
                     'email' => $user->email,
                     'mobile' => $user->mobile,
                     'status' => $user->status,
@@ -97,6 +123,33 @@ class AuthController extends Controller
                     'branch' => $user->branch,
                 ],
                 'token' => $token,
+            ],
+        ], 200);
+    }
+
+
+    /**
+     * Get authenticated user information.
+     *
+     * @param  IlluminateHttpRequest  $request
+     * @return IlluminateHttpJsonResponse
+     */
+    public function me(Request $request)
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'username' => $user->username,
+                    'email' => $user->email,
+                    'mobile' => $user->mobile,
+                    'status' => $user->status,
+                    'branch_id' => $user->branch_id,
+                ],
             ],
         ], 200);
     }
@@ -129,6 +182,9 @@ class AuthController extends Controller
                 ->where('user_id', $user->id)
                 ->delete();
         }
+
+        // Clear the active device ID
+        $user->update(['active_device_id' => null]);
 
         // Delete the current access token
         $user->currentAccessToken()->delete();
