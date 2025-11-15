@@ -21,6 +21,10 @@ class CallLog extends Model
         'call_type',
         'call_duration',
         'call_timestamp',
+        'sim_slot_index',
+        'sim_name',
+        'sim_number',
+        'sim_serial_number',
         'notes',
     ];
 

@@ -75,4 +75,12 @@ class Admin extends Authenticatable
     {
         return $this->admin_role === 'trainee';
     }
+
+    /**
+     * Get all login activities for this admin.
+     */
+    public function loginActivities()
+    {
+        return $this->hasMany(UserLoginActivity::class);
+    }
 }

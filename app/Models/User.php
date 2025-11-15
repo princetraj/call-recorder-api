@@ -69,4 +69,12 @@ class User extends Authenticatable
         return $this->belongsTo(Branch::class);
     }
 
+    /**
+     * Get all login activities for this user.
+     */
+    public function loginActivities()
+    {
+        return $this->hasMany(UserLoginActivity::class);
+    }
+
 }

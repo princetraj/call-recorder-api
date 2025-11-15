@@ -10,7 +10,9 @@
       "Bash(php create_user.php:*)",
       "Bash(\"C:\\wamp64\\bin\\mysql\\mysql9.1.0\\bin\\mysql.exe\" -u root call_logs_db -e \"SELECT id, name, email, role, status, created_at FROM users WHERE email = ''user@example.com'';\")",
       "Bash(del:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(\"C:\\wamp64\\bin\\mysql\\mysql9.1.0\\bin\\mysql.exe\" -u root call_logs_db -e \"SELECT id, email, password, created_at FROM admins WHERE email = ''superadmin@office.com'';\")",
+      "Bash(php artisan:*)"
     ],
     "deny": [],
     "ask": []

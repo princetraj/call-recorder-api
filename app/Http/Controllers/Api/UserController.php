@@ -29,11 +29,12 @@ class UserController extends Controller
             $query->where('status', $request->status);
         }
 
-        // Search by name, email, or mobile
+        // Search by name, user ID, email, or mobile
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('id', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
                   ->orWhere('mobile', 'like', "%{$search}%");
             });
@@ -57,7 +58,7 @@ class UserController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email|max:255',
+            'email' => 'nullable|email|unique:users,email|max:255',
             'password' => 'required|string|min:6',
             'mobile' => 'nullable|string|max:20',
             'status' => 'nullable|in:active,inactive',
@@ -127,7 +128,7 @@ class UserController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email,' . $id,
+            'email' => 'nullable|email|max:255|unique:users,email,' . $id,
             'password' => 'nullable|string|min:6',
             'mobile' => 'nullable|string|max:20',
             'status' => 'nullable|in:active,inactive',

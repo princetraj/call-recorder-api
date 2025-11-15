@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CallLogController;
 use App\Http\Controllers\Api\CallRecordingController;
 use App\Http\Controllers\Api\DeviceController;
+use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -102,6 +103,9 @@ Route::prefix('admin')->middleware(['auth:admin', 'admin.role'])->group(function
 
     // Call logs - All admins can view
     Route::get('/call-logs', [CallLogController::class, 'index']);
+    Route::get('/call-logs/statistics', [CallLogController::class, 'statistics']);
+    Route::get('/call-logs/export/excel', [CallLogController::class, 'exportExcel']);
+    Route::get('/call-logs/export/pdf', [CallLogController::class, 'exportPdf']);
     Route::get('/call-logs/{id}', [CallLogController::class, 'show']);
 
     // Call recordings - All admins can view
@@ -110,4 +114,13 @@ Route::prefix('admin')->middleware(['auth:admin', 'admin.role'])->group(function
     // Devices - All admins can view
     Route::get('/devices', [DeviceController::class, 'index']);
     Route::get('/devices/{id}', [DeviceController::class, 'show']);
+
+    // Device logout - All admins can trigger logout
+    Route::post('/devices/{id}/logout', [DeviceController::class, 'logout']);
+
+    // Login activity routes - All admins can view
+    Route::get('/login-activities', [LoginActivityController::class, 'index']);
+    Route::get('/login-activities/statistics', [LoginActivityController::class, 'statistics']);
+    Route::get('/login-activities/user/{userId}', [LoginActivityController::class, 'userActivity']);
+    Route::get('/login-activities/admin/{adminId}', [LoginActivityController::class, 'adminActivity']);
 });

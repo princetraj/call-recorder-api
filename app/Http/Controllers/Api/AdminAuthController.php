@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
+use App\Models\UserLoginActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -24,14 +25,42 @@ class AdminAuthController extends Controller
 
         $admin = Admin::with('branch')->where('email', $request->email)->first();
 
+        // Log failed login attempt if admin not found or password incorrect
         if (!$admin || !Hash::check($request->password, $admin->password)) {
+            UserLoginActivity::create([
+                'admin_id' => $admin ? $admin->id : null,
+                'user_type' => 'admin',
+                'email' => $request->email,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'device_name' => $request->input('device_name'),
+                'device_id' => $request->input('device_id'),
+                'status' => 'failed',
+                'failure_reason' => 'Invalid credentials',
+                'login_at' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid credentials',
             ], 401);
         }
 
+        // Log failed login attempt if account is inactive
         if ($admin->status !== 'active') {
+            UserLoginActivity::create([
+                'admin_id' => $admin->id,
+                'user_type' => 'admin',
+                'email' => $request->email,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'device_name' => $request->input('device_name'),
+                'device_id' => $request->input('device_id'),
+                'status' => 'failed',
+                'failure_reason' => 'Account is inactive',
+                'login_at' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Account is inactive',
@@ -39,6 +68,19 @@ class AdminAuthController extends Controller
         }
 
         $token = $admin->createToken('admin-token', ['admin'])->plainTextToken;
+
+        // Log successful login attempt
+        UserLoginActivity::create([
+            'admin_id' => $admin->id,
+            'user_type' => 'admin',
+            'email' => $request->email,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'device_name' => $request->input('device_name'),
+            'device_id' => $request->input('device_id'),
+            'status' => 'success',
+            'login_at' => now(),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -66,7 +108,21 @@ class AdminAuthController extends Controller
      */
     public function logout(Request $request)
     {
-        $request->user('admin')->currentAccessToken()->delete();
+        $admin = $request->user('admin');
+
+        // Update the most recent login activity with logout time
+        $loginActivity = UserLoginActivity::where('admin_id', $admin->id)
+            ->where('user_type', 'admin')
+            ->where('status', 'success')
+            ->whereNull('logout_at')
+            ->latest('login_at')
+            ->first();
+
+        if ($loginActivity) {
+            $loginActivity->update(['logout_at' => now()]);
+        }
+
+        $admin->currentAccessToken()->delete();
 
         return response()->json([
             'success' => true,

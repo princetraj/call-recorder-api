@@ -25,12 +25,14 @@ class Device extends Model
         'current_call_number',
         'call_started_at',
         'last_updated_at',
+        'should_logout',
     ];
 
     protected $casts = [
         'battery_percentage' => 'integer',
         'signal_strength' => 'integer',
         'is_charging' => 'boolean',
+        'should_logout' => 'boolean',
         'call_started_at' => 'datetime',
         'last_updated_at' => 'datetime',
         'created_at' => 'datetime',

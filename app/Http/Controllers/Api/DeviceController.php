@@ -89,6 +89,9 @@ class DeviceController extends Controller
                 ], 404);
             }
 
+            // Check if device should logout
+            $shouldLogout = $device->should_logout;
+
             $device->update([
                 'connection_type' => $request->connection_type ?? $device->connection_type,
                 'battery_percentage' => $request->battery_percentage ?? $device->battery_percentage,
@@ -99,12 +102,14 @@ class DeviceController extends Controller
                 'current_call_number' => $request->current_call_number ?? $device->current_call_number,
                 'call_started_at' => $request->current_call_status && $request->current_call_status !== 'idle' ? ($device->current_call_status === 'idle' ? now() : $device->call_started_at) : null,
                 'last_updated_at' => now(),
+                'should_logout' => false, // Clear the logout flag after sending it to device
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Device status updated successfully',
-                'data' => $device->fresh()
+                'data' => $device->fresh(),
+                'should_logout' => $shouldLogout
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
@@ -242,6 +247,30 @@ class DeviceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete device',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function logout($id)
+    {
+        try {
+            $device = Device::findOrFail($id);
+
+            // Mark device as logged out by setting a special flag
+            $device->update([
+                'should_logout' => true,
+                'last_updated_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Device logout signal sent successfully'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send logout signal',
                 'error' => $e->getMessage()
             ], 500);
         }
