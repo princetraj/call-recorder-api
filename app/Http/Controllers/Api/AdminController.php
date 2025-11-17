@@ -67,6 +67,8 @@ class AdminController extends Controller
             'admin_role' => ['required', Rule::in(['super_admin', 'manager', 'trainee'])],
             'branch_id' => 'nullable|exists:branches,id',
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'assigned_user_ids' => 'nullable|array',
+            'assigned_user_ids.*' => 'exists:users,id',
         ]);
 
         $admin = Admin::create([
@@ -76,6 +78,7 @@ class AdminController extends Controller
             'admin_role' => $request->admin_role,
             'branch_id' => $request->branch_id,
             'status' => $request->status ?? 'active',
+            'assigned_user_ids' => $request->assigned_user_ids,
         ]);
 
         $admin->load('branch');
@@ -135,15 +138,24 @@ class AdminController extends Controller
             'admin_role' => ['sometimes', 'required', Rule::in(['super_admin', 'manager', 'trainee'])],
             'branch_id' => 'nullable|exists:branches,id',
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
+            'assigned_user_ids' => 'nullable|array',
+            'assigned_user_ids.*' => 'exists:users,id',
         ]);
 
-        $admin->update([
+        $updateData = [
             'name' => $request->name ?? $admin->name,
             'email' => $request->email ?? $admin->email,
             'admin_role' => $request->admin_role ?? $admin->admin_role,
             'branch_id' => $request->branch_id,
             'status' => $request->status ?? $admin->status,
-        ]);
+        ];
+
+        // Update assigned_user_ids if provided
+        if ($request->has('assigned_user_ids')) {
+            $updateData['assigned_user_ids'] = $request->assigned_user_ids;
+        }
+
+        $admin->update($updateData);
 
         // Update password only if provided
         if ($request->filled('password')) {

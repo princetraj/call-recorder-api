@@ -108,6 +108,7 @@ Route::prefix('admin')->middleware(['auth:admin', 'admin.role'])->group(function
     Route::get('/call-logs/export/excel', [CallLogController::class, 'exportExcel']);
     Route::get('/call-logs/export/pdf', [CallLogController::class, 'exportPdf']);
     Route::get('/call-logs/{id}', [CallLogController::class, 'show']);
+    Route::get('/call-logs/{id}/productivity-tracking', [CallLogController::class, 'productivityTracking']);
 
     // Call recordings - All admins can view
     Route::get('/call-logs/{callLogId}/recordings', [CallRecordingController::class, 'index']);

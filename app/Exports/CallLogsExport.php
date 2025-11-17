@@ -8,9 +8,10 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class CallLogsExport implements FromQuery, WithHeadings, WithMapping, WithStyles, ShouldAutoSize
+class CallLogsExport implements FromQuery, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithChunkReading
 {
     protected $query;
 
@@ -94,5 +95,14 @@ class CallLogsExport implements FromQuery, WithHeadings, WithMapping, WithStyles
         $minutes = floor($seconds / 60);
         $secs = $seconds % 60;
         return sprintf('%d:%02d', $minutes, $secs);
+    }
+
+    /**
+     * Define chunk size for reading data in batches.
+     * OPTIMIZED: Process 1000 rows at a time to prevent memory issues with large exports.
+     */
+    public function chunkSize(): int
+    {
+        return 1000;
     }
 }

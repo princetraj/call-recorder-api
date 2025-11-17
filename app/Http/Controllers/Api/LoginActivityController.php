@@ -19,6 +19,25 @@ class LoginActivityController extends Controller
         $query = UserLoginActivity::with(['user', 'admin'])
             ->orderBy('login_at', 'desc');
 
+        // Role-based filtering
+        $admin = auth()->user();
+        if ($admin instanceof \App\Models\Admin) {
+            if ($admin->admin_role === 'manager') {
+                // Manager sees only app user login activities from their branch
+                $query->where('user_type', 'user');
+
+                if ($admin->branch_id) {
+                    $query->whereHas('user', function ($q) use ($admin) {
+                        $q->where('branch_id', $admin->branch_id);
+                    });
+                } else {
+                    // If manager has no branch, show no results
+                    $query->whereRaw('1 = 0');
+                }
+            }
+            // Super admin sees all login activities (no additional filtering)
+        }
+
         // Filter by user type (user or admin)
         if ($request->has('user_type')) {
             $query->where('user_type', $request->user_type);
@@ -109,6 +128,25 @@ class LoginActivityController extends Controller
     {
         $query = UserLoginActivity::query();
 
+        // Role-based filtering
+        $admin = auth()->user();
+        if ($admin instanceof \App\Models\Admin) {
+            if ($admin->admin_role === 'manager') {
+                // Manager sees only app user login statistics from their branch
+                $query->where('user_type', 'user');
+
+                if ($admin->branch_id) {
+                    $query->whereHas('user', function ($q) use ($admin) {
+                        $q->where('branch_id', $admin->branch_id);
+                    });
+                } else {
+                    // If manager has no branch, show no results
+                    $query->whereRaw('1 = 0');
+                }
+            }
+            // Super admin sees all statistics (no additional filtering)
+        }
+
         // Filter by date range
         if ($request->has('start_date')) {
             $query->whereDate('login_at', '>=', $request->start_date);
@@ -124,11 +162,27 @@ class LoginActivityController extends Controller
         $userLogins = (clone $query)->where('user_type', 'user')->count();
         $adminLogins = (clone $query)->where('user_type', 'admin')->count();
 
-        // Get most recent activities
-        $recentActivities = UserLoginActivity::with(['user', 'admin'])
+        // Get most recent activities with same filtering
+        $recentQuery = UserLoginActivity::with(['user', 'admin'])
             ->orderBy('login_at', 'desc')
-            ->limit(10)
-            ->get()
+            ->limit(10);
+
+        // Apply same role-based filtering for recent activities
+        if ($admin instanceof \App\Models\Admin) {
+            if ($admin->admin_role === 'manager') {
+                $recentQuery->where('user_type', 'user');
+
+                if ($admin->branch_id) {
+                    $recentQuery->whereHas('user', function ($q) use ($admin) {
+                        $q->where('branch_id', $admin->branch_id);
+                    });
+                } else {
+                    $recentQuery->whereRaw('1 = 0');
+                }
+            }
+        }
+
+        $recentActivities = $recentQuery->get()
             ->map(function ($activity) {
                 return [
                     'id' => $activity->id,

@@ -23,6 +23,7 @@ class Admin extends Authenticatable
         'admin_role',
         'status',
         'branch_id',
+        'assigned_user_ids',
     ];
 
     /**
@@ -42,6 +43,7 @@ class Admin extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'assigned_user_ids' => 'array',
     ];
 
     /**

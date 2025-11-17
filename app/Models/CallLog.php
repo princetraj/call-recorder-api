@@ -59,7 +59,13 @@ class CallLog extends Model
      */
     public function scopeDateRange($query, $from, $to)
     {
-        return $query->whereBetween('call_timestamp', [$from, $to]);
+        // Append time to ensure the entire day is included
+        // From: start of day (00:00:00)
+        // To: end of day (23:59:59)
+        $fromDateTime = $from . ' 00:00:00';
+        $toDateTime = $to . ' 23:59:59';
+
+        return $query->whereBetween('call_timestamp', [$fromDateTime, $toDateTime]);
     }
 
     /**

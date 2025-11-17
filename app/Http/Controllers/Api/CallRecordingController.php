@@ -19,7 +19,7 @@ class CallRecordingController extends Controller
     {
         $validated = $request->validate([
             'call_log_id' => 'required|exists:call_logs,id',
-            'recording' => 'required|file|mimetypes:audio/*,video/mp4,application/octet-stream|max:51200', // max 50MB - Accept any audio file
+            'recording' => 'required|file|mimes:m4a,mp3,wav,3gp,amr,ogg,aac,flac,mp4,3gpp|max:51200', // max 50MB - Accept audio/video files
             'duration' => 'nullable|integer|min:0',
         ]);
 
@@ -35,32 +35,116 @@ class CallRecordingController extends Controller
             ], 403);
         }
 
-        // Handle file upload
-        $file = $request->file('recording');
-        $timestamp = time();
-        $originalName = $file->getClientOriginalName();
-        $filename = $timestamp . '_' . $originalName;
+        // Validate: Reject recordings for missed/rejected calls or zero duration calls
+        if (in_array($callLog->call_type, ['missed', 'rejected'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot upload recording for missed or rejected calls',
+            ], 422);
+        }
 
-        // Store in public/recordings
-        $path = $file->storeAs('recordings', $filename, 'public');
+        if ($callLog->call_duration == 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot upload recording for calls with zero duration',
+            ], 422);
+        }
 
-        // Create database record
-        $recording = CallRecording::create([
-            'call_log_id' => $request->call_log_id,
-            'file_name' => $originalName,
-            'file_path' => $path,
-            'file_size' => $file->getSize(),
-            'file_type' => $file->getMimeType(),
-            'duration' => $request->duration,
-        ]);
+        // IMPROVED: Use try-catch for file operations and add verification
+        try {
+            // CRITICAL: Check for duplicate recording upload
+            // Prevents duplicate uploads if retry logic causes re-submission
+            $existingRecording = CallRecording::where('call_log_id', $request->call_log_id)
+                ->where('file_size', $request->file('recording')->getSize())
+                ->first();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Recording uploaded successfully',
-            'data' => [
-                'recording' => $recording,
-            ],
-        ], 201);
+            if ($existingRecording) {
+                \Log::info('Duplicate recording detected, returning existing', [
+                    'recording_id' => $existingRecording->id,
+                    'call_log_id' => $request->call_log_id,
+                    'file_size' => $request->file('recording')->getSize(),
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Recording already exists (duplicate prevented)',
+                    'data' => [
+                        'recording' => $existingRecording,
+                    ],
+                ], 200);
+            }
+
+            // Handle file upload
+            $file = $request->file('recording');
+            $timestamp = time();
+            $originalName = $file->getClientOriginalName();
+            $filename = $timestamp . '_' . $originalName;
+
+            // Store in public/recordings
+            $path = $file->storeAs('recordings', $filename, 'public');
+
+            // CRITICAL: Verify file was actually written to disk
+            $fullPath = storage_path('app/public/' . $path);
+            if (!file_exists($fullPath)) {
+                \Log::error('Recording file not found after upload', [
+                    'path' => $path,
+                    'full_path' => $fullPath,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File upload failed - file not written to disk',
+                ], 500);
+            }
+
+            // Verify file size matches
+            $uploadedSize = filesize($fullPath);
+            if ($uploadedSize !== $file->getSize()) {
+                \Log::error('Recording file size mismatch', [
+                    'expected' => $file->getSize(),
+                    'actual' => $uploadedSize,
+                    'path' => $path,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File upload incomplete - size mismatch',
+                ], 500);
+            }
+
+            // Create database record
+            $recording = CallRecording::create([
+                'call_log_id' => $request->call_log_id,
+                'file_name' => $originalName,
+                'file_path' => $path,
+                'file_size' => $file->getSize(),
+                'file_type' => $file->getMimeType(),
+                'duration' => $request->duration,
+            ]);
+
+            \Log::info('Recording uploaded successfully', [
+                'recording_id' => $recording->id,
+                'call_log_id' => $request->call_log_id,
+                'file_size' => $file->getSize(),
+                'file_name' => $originalName,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Recording uploaded successfully',
+                'data' => [
+                    'recording' => $recording,
+                ],
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error('Failed to upload recording', [
+                'error' => $e->getMessage(),
+                'call_log_id' => $request->call_log_id,
+                'user_id' => auth()->id(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload recording: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
