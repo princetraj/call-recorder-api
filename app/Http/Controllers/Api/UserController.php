@@ -29,7 +29,17 @@ class UserController extends Controller
             $query->where('status', $request->status);
         }
 
-        // Search by name, user ID, username, email, or mobile
+        // Filter by user ID (exact match)
+        if ($request->has('user_id')) {
+            $query->where('id', $request->user_id);
+        }
+
+        // Filter by name (partial match)
+        if ($request->has('name')) {
+            $query->where('name', 'like', "%{$request->name}%");
+        }
+
+        // Search by name, user ID, username, email, or mobile (fallback for backward compatibility)
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {

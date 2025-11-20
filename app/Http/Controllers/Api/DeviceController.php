@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Device;
+use App\Models\DeviceActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -31,9 +32,9 @@ class DeviceController extends Controller
             $device = Device::updateOrCreate(
                 [
                     'device_id' => $request->device_id,
-                    'user_id' => $request->user()->id
                 ],
                 [
+                    'user_id' => $request->user()->id,
                     'device_model' => $request->device_model,
                     'manufacturer' => $request->manufacturer,
                     'os_version' => $request->os_version,
@@ -144,13 +145,22 @@ class DeviceController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Device::with('user:id,name,email')
+            $query = Device::with(['user:id,name,email,branch_id', 'user.branch:id,name'])
                 ->orderBy('last_updated_at', 'desc');
 
+            // Filter by user
             if ($request->has('user_id')) {
                 $query->where('user_id', $request->user_id);
             }
 
+            // Filter by branch
+            if ($request->has('branch_id')) {
+                $query->whereHas('user', function($q) use ($request) {
+                    $q->where('branch_id', $request->branch_id);
+                });
+            }
+
+            // Filter by status (online/offline)
             if ($request->has('status')) {
                 if ($request->status === 'online') {
                     $query->where('last_updated_at', '>=', now()->subMinutes(10));
@@ -162,13 +172,54 @@ class DeviceController extends Controller
                 }
             }
 
+            // Filter by permission status
+            if ($request->has('permission_status')) {
+                if ($request->permission_status === 'all_granted') {
+                    $query->where('perm_read_call_log', true)
+                          ->where('perm_read_phone_state', true)
+                          ->where('perm_read_contacts', true)
+                          ->where('perm_read_external_storage', true)
+                          ->where('perm_read_media_audio', true)
+                          ->where('perm_post_notifications', true);
+                } elseif ($request->permission_status === 'some_denied') {
+                    $query->where(function($q) {
+                        $q->where('perm_read_call_log', false)
+                          ->orWhere('perm_read_phone_state', false)
+                          ->orWhere('perm_read_contacts', false)
+                          ->orWhere('perm_read_external_storage', false)
+                          ->orWhere('perm_read_media_audio', false)
+                          ->orWhere('perm_post_notifications', false);
+                    });
+                } elseif ($request->permission_status === 'all_denied') {
+                    $query->where('perm_read_call_log', false)
+                          ->where('perm_read_phone_state', false)
+                          ->where('perm_read_contacts', false)
+                          ->where('perm_read_external_storage', false)
+                          ->where('perm_read_media_audio', false)
+                          ->where('perm_post_notifications', false);
+                }
+            }
+
             $perPage = $request->input('per_page', 20);
             $devices = $query->paginate($perPage);
 
             $devices->getCollection()->transform(function ($device) {
+                $userData = null;
+                if ($device->user) {
+                    $userData = [
+                        'id' => $device->user->id,
+                        'name' => $device->user->name,
+                        'email' => $device->user->email,
+                        'branch' => $device->user->branch ? [
+                            'id' => $device->user->branch->id,
+                            'name' => $device->user->branch->name,
+                        ] : null,
+                    ];
+                }
+
                 return [
                     'id' => $device->id,
-                    'user' => $device->user,
+                    'user' => $userData,
                     'device_id' => $device->device_id,
                     'device_model' => $device->device_model,
                     'manufacturer' => $device->manufacturer,
@@ -270,21 +321,52 @@ class DeviceController extends Controller
         }
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         try {
             $device = Device::with('user')->findOrFail($id);
+            $admin = $request->user('admin');
 
-            // Clear the user's active device ID if it matches this device
-            if ($device->user && $device->user->active_device_id === $device->device_id) {
-                $device->user->update(['active_device_id' => null]);
+            // Store device information before deletion for logging
+            $deviceData = [
+                'device_id' => $device->id,
+                'user_id' => $device->user_id,
+                'device_name' => $device->device_name,
+                'device_model' => $device->device_model,
+                'device_id_value' => $device->device_id,
+            ];
+
+            // If device has a user, log them out
+            if ($device->user) {
+                // Clear the user's active device ID if it matches this device
+                if ($device->user->active_device_id === $device->device_id) {
+                    $device->user->update(['active_device_id' => null]);
+                }
+
+                // Revoke all authentication tokens for this user to force logout
+                $device->user->tokens()->delete();
             }
+
+            // Log the device removal activity before deletion
+            DeviceActivity::create([
+                'device_id' => $deviceData['device_id'],
+                'user_id' => $deviceData['user_id'],
+                'admin_id' => $admin->id,
+                'action_type' => 'removal',
+                'device_name' => $deviceData['device_name'],
+                'device_model' => $deviceData['device_model'],
+                'device_id_value' => $deviceData['device_id_value'],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'notes' => 'Admin-initiated device removal from admin panel',
+                'performed_at' => now(),
+            ]);
 
             $device->delete();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Device deleted successfully'
+                'message' => 'Device deleted successfully and user logged out'
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
@@ -295,10 +377,11 @@ class DeviceController extends Controller
         }
     }
 
-    public function logout($id)
+    public function logout(Request $request, $id)
     {
         try {
             $device = Device::with('user')->findOrFail($id);
+            $admin = $request->user('admin');
 
             // Clear the user's active device ID if it matches this device
             if ($device->user && $device->user->active_device_id === $device->device_id) {
@@ -309,6 +392,21 @@ class DeviceController extends Controller
             $device->update([
                 'should_logout' => true,
                 'last_updated_at' => now(),
+            ]);
+
+            // Log the device logout activity
+            DeviceActivity::create([
+                'device_id' => $device->id,
+                'user_id' => $device->user_id,
+                'admin_id' => $admin->id,
+                'action_type' => 'logout',
+                'device_name' => $device->device_name,
+                'device_model' => $device->device_model,
+                'device_id_value' => $device->device_id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'notes' => 'Admin-initiated device logout from admin panel',
+                'performed_at' => now(),
             ]);
 
             return response()->json([

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CallLogController;
 use App\Http\Controllers\Api\CallRecordingController;
+use App\Http\Controllers\Api\DeviceActivityController;
 use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\UserController;
@@ -122,12 +123,21 @@ Route::prefix('admin')->middleware(['auth:admin', 'admin.role'])->group(function
     Route::get('/devices', [DeviceController::class, 'index']);
     Route::get('/devices/{id}', [DeviceController::class, 'show']);
 
-    // Device logout - All admins can trigger logout
+    // Device logout and delete - Only super_admin can delete
     Route::post('/devices/{id}/logout', [DeviceController::class, 'logout']);
+    Route::middleware('admin.role:super_admin')->group(function () {
+        Route::delete('/devices/{id}', [DeviceController::class, 'destroy']);
+    });
 
     // Login activity routes - All admins can view
     Route::get('/login-activities', [LoginActivityController::class, 'index']);
     Route::get('/login-activities/statistics', [LoginActivityController::class, 'statistics']);
     Route::get('/login-activities/user/{userId}', [LoginActivityController::class, 'userActivity']);
     Route::get('/login-activities/admin/{adminId}', [LoginActivityController::class, 'adminActivity']);
+
+    // Device activity routes - All admins can view
+    Route::get('/device-activities', [DeviceActivityController::class, 'index']);
+    Route::get('/device-activities/statistics', [DeviceActivityController::class, 'statistics']);
+    Route::get('/device-activities/user/{userId}', [DeviceActivityController::class, 'userActivity']);
+    Route::get('/device-activities/admin/{adminId}', [DeviceActivityController::class, 'adminActivity']);
 });
