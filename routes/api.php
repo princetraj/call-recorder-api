@@ -46,6 +46,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/call-recordings', [CallRecordingController::class, 'store']);
     Route::delete('/call-recordings/{id}', [CallRecordingController::class, 'destroy']);
 
+    // Chunked upload routes
+    Route::post('/call-recordings/chunked/init', [CallRecordingController::class, 'initChunkedUpload']);
+    Route::post('/call-recordings/chunked/upload', [CallRecordingController::class, 'uploadChunk']);
+    Route::get('/call-recordings/chunked/status/{uploadId}', [CallRecordingController::class, 'getUploadStatus']);
+
     // Device routes
     Route::post('/devices/register', [DeviceController::class, 'register']);
     Route::post('/devices/status', [DeviceController::class, 'updateStatus']);

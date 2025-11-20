@@ -27,9 +27,10 @@ class LoginActivityController extends Controller
                 $query->where('user_type', 'user');
 
                 if ($admin->branch_id) {
-                    $query->whereHas('user', function ($q) use ($admin) {
-                        $q->where('branch_id', $admin->branch_id);
-                    });
+                    // OPTIMIZED: Use JOIN instead of whereHas for better performance
+                    $query->join('users', 'user_login_activities.user_id', '=', 'users.id')
+                          ->where('users.branch_id', $admin->branch_id)
+                          ->select('user_login_activities.*'); // Ensure we only select activity columns
                 } else {
                     // If manager has no branch, show no results
                     $query->whereRaw('1 = 0');
@@ -68,6 +69,8 @@ class LoginActivityController extends Controller
         }
 
         // Search by email, user_id, or user name
+        // Note: Keep whereHas here as search is optional and less critical for performance
+        // Optimizing this would require complex left joins that may not be worth the complexity
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -136,9 +139,10 @@ class LoginActivityController extends Controller
                 $query->where('user_type', 'user');
 
                 if ($admin->branch_id) {
-                    $query->whereHas('user', function ($q) use ($admin) {
-                        $q->where('branch_id', $admin->branch_id);
-                    });
+                    // OPTIMIZED: Use JOIN instead of whereHas for better performance
+                    $query->join('users', 'user_login_activities.user_id', '=', 'users.id')
+                          ->where('users.branch_id', $admin->branch_id)
+                          ->select('user_login_activities.*'); // Ensure we only select activity columns
                 } else {
                     // If manager has no branch, show no results
                     $query->whereRaw('1 = 0');
@@ -156,11 +160,20 @@ class LoginActivityController extends Controller
             $query->whereDate('login_at', '<=', $request->end_date);
         }
 
-        $totalLogins = $query->count();
-        $successfulLogins = (clone $query)->where('status', 'success')->count();
-        $failedLogins = (clone $query)->where('status', 'failed')->count();
-        $userLogins = (clone $query)->where('user_type', 'user')->count();
-        $adminLogins = (clone $query)->where('user_type', 'admin')->count();
+        // OPTIMIZED: Get all statistics in a single query instead of 5 separate queries
+        $stats = $query->selectRaw('
+            COUNT(*) as total_logins,
+            SUM(CASE WHEN status = "success" THEN 1 ELSE 0 END) as successful_logins,
+            SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed_logins,
+            SUM(CASE WHEN user_type = "user" THEN 1 ELSE 0 END) as user_logins,
+            SUM(CASE WHEN user_type = "admin" THEN 1 ELSE 0 END) as admin_logins
+        ')->first();
+
+        $totalLogins = $stats->total_logins ?? 0;
+        $successfulLogins = $stats->successful_logins ?? 0;
+        $failedLogins = $stats->failed_logins ?? 0;
+        $userLogins = $stats->user_logins ?? 0;
+        $adminLogins = $stats->admin_logins ?? 0;
 
         // Get most recent activities with same filtering
         $recentQuery = UserLoginActivity::with(['user', 'admin'])
@@ -173,9 +186,10 @@ class LoginActivityController extends Controller
                 $recentQuery->where('user_type', 'user');
 
                 if ($admin->branch_id) {
-                    $recentQuery->whereHas('user', function ($q) use ($admin) {
-                        $q->where('branch_id', $admin->branch_id);
-                    });
+                    // OPTIMIZED: Use JOIN instead of whereHas
+                    $recentQuery->join('users', 'user_login_activities.user_id', '=', 'users.id')
+                                ->where('users.branch_id', $admin->branch_id)
+                                ->select('user_login_activities.*');
                 } else {
                     $recentQuery->whereRaw('1 = 0');
                 }

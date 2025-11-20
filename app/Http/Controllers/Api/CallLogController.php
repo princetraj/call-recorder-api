@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CallLog;
 use App\Exports\CallLogsExport;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -125,6 +126,9 @@ class CallLogController extends Controller
                     'caller_number' => $request->caller_number,
                     'call_timestamp' => $request->call_timestamp,
                 ]);
+
+                // PERFORMANCE: Invalidate statistics cache for this user
+                $this->invalidateStatisticsCache(auth()->user());
 
                 return response()->json([
                     'success' => true,
@@ -262,8 +266,12 @@ class CallLogController extends Controller
             $query->search($request->search);
         }
 
-        // Load recordings with count
-        $query->with('recordings')->withCount('recordings');
+        // OPTIMIZED: Only load recordings if explicitly requested, otherwise just count
+        // This prevents loading potentially large recording data for listing views
+        if ($request->get('include_recordings', false)) {
+            $query->with('recordings');
+        }
+        $query->withCount('recordings');
 
         // Apply sorting
         $sortBy = $request->get('sort_by', 'call_timestamp');
@@ -444,10 +452,9 @@ class CallLogController extends Controller
                 if ($user->admin_role === 'super_admin') {
                     $query->byUser($request->user_id);
                 } elseif ($user->admin_role === 'manager') {
-                    $query->byUser($request->user_id)
-                          ->whereHas('user', function ($q) use ($user) {
-                              $q->where('branch_id', $user->branch_id);
-                          });
+                    // OPTIMIZED: No need for additional whereHas since JOIN already applied above
+                    // The JOIN at line 175-177 already filters by branch_id for managers
+                    $query->byUser($request->user_id);
                 } elseif ($user->admin_role === 'trainee') {
                     // Trainee can only filter by their assigned users
                     if ($user->assigned_user_ids && in_array($request->user_id, $user->assigned_user_ids)) {
@@ -474,8 +481,9 @@ class CallLogController extends Controller
             $query->search($request->search);
         }
 
-        // Load recordings with count
-        $query->with('recordings')->withCount('recordings');
+        // OPTIMIZED: For exports, we typically don't need recording file data
+        // Just use count to show if recordings exist
+        $query->withCount('recordings');
 
         // Apply sorting
         $sortBy = $request->get('sort_by', 'call_timestamp');
@@ -542,74 +550,78 @@ class CallLogController extends Controller
     public function statistics(Request $request)
     {
         $period = $request->input('period', 'daily'); // daily, weekly, monthly
-
-        $query = CallLog::query();
         $user = auth()->user();
 
-        // Apply role-based filtering
-        if ($user instanceof \App\Models\Admin) {
-            if ($user->admin_role === 'super_admin') {
-                // Super admin sees all statistics
-            } elseif ($user->admin_role === 'manager') {
-                // Manager sees statistics from their branch
-                // OPTIMIZED: Use JOIN instead of whereHas for better performance
-                if ($user->branch_id) {
-                    $query->join('users', 'call_logs.user_id', '=', 'users.id')
-                          ->where('users.branch_id', $user->branch_id)
-                          ->select('call_logs.*'); // Ensure we only select call_logs columns
-                } else {
-                    $query->whereRaw('1 = 0');
-                }
-            } elseif ($user->admin_role === 'trainee') {
-                // Trainee sees statistics from assigned users
-                if ($user->assigned_user_ids && count($user->assigned_user_ids) > 0) {
-                    $query->whereIn('user_id', $user->assigned_user_ids);
+        // Generate cache key based on user and period
+        $cacheKey = $this->getStatisticsCacheKey($user, $period);
+
+        // PERFORMANCE: Cache statistics for 5 minutes to reduce database load
+        // Cache is invalidated when new call logs are created (see store method)
+        $data = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($period, $user) {
+            $query = CallLog::query();
+
+            // Apply role-based filtering
+            if ($user instanceof \App\Models\Admin) {
+                if ($user->admin_role === 'super_admin') {
+                    // Super admin sees all statistics
+                } elseif ($user->admin_role === 'manager') {
+                    // Manager sees statistics from their branch
+                    // OPTIMIZED: Use JOIN instead of whereHas for better performance
+                    if ($user->branch_id) {
+                        $query->join('users', 'call_logs.user_id', '=', 'users.id')
+                              ->where('users.branch_id', $user->branch_id)
+                              ->select('call_logs.*'); // Ensure we only select call_logs columns
+                    } else {
+                        $query->whereRaw('1 = 0');
+                    }
+                } elseif ($user->admin_role === 'trainee') {
+                    // Trainee sees statistics from assigned users
+                    if ($user->assigned_user_ids && count($user->assigned_user_ids) > 0) {
+                        $query->whereIn('user_id', $user->assigned_user_ids);
+                    } else {
+                        $query->whereRaw('1 = 0');
+                    }
                 } else {
                     $query->whereRaw('1 = 0');
                 }
             } else {
-                $query->whereRaw('1 = 0');
+                $query->where('user_id', auth()->id());
             }
-        } else {
-            $query->where('user_id', auth()->id());
-        }
 
-        // Apply period filter
-        switch ($period) {
-            case 'daily':
-                $query->whereDate('call_timestamp', '>=', now()->startOfDay());
-                break;
-            case 'weekly':
-                $query->whereDate('call_timestamp', '>=', now()->startOfWeek());
-                break;
-            case 'monthly':
-                $query->whereDate('call_timestamp', '>=', now()->startOfMonth());
-                break;
-        }
+            // Apply period filter
+            switch ($period) {
+                case 'daily':
+                    $query->whereDate('call_timestamp', '>=', now()->startOfDay());
+                    break;
+                case 'weekly':
+                    $query->whereDate('call_timestamp', '>=', now()->startOfWeek());
+                    break;
+                case 'monthly':
+                    $query->whereDate('call_timestamp', '>=', now()->startOfMonth());
+                    break;
+            }
 
-        // OPTIMIZED: Get all statistics in a single query instead of 6 separate queries
-        $stats = $query->selectRaw('
-            COUNT(*) as total_calls,
-            SUM(CASE WHEN call_type = "incoming" THEN 1 ELSE 0 END) as incoming,
-            SUM(CASE WHEN call_type = "outgoing" THEN 1 ELSE 0 END) as outgoing,
-            SUM(CASE WHEN call_type = "missed" THEN 1 ELSE 0 END) as missed,
-            SUM(CASE WHEN call_type = "rejected" THEN 1 ELSE 0 END) as rejected,
-            SUM(call_duration) as total_duration
-        ')->first();
+            // OPTIMIZED: Get all statistics in a single query instead of 6 separate queries
+            $stats = $query->selectRaw('
+                COUNT(*) as total_calls,
+                SUM(CASE WHEN call_type = "incoming" THEN 1 ELSE 0 END) as incoming,
+                SUM(CASE WHEN call_type = "outgoing" THEN 1 ELSE 0 END) as outgoing,
+                SUM(CASE WHEN call_type = "missed" THEN 1 ELSE 0 END) as missed,
+                SUM(CASE WHEN call_type = "rejected" THEN 1 ELSE 0 END) as rejected,
+                SUM(call_duration) as total_duration
+            ')->first();
 
-        $totalCalls = $stats->total_calls ?? 0;
-        $incoming = $stats->incoming ?? 0;
-        $outgoing = $stats->outgoing ?? 0;
-        $missed = $stats->missed ?? 0;
-        $rejected = $stats->rejected ?? 0;
-        $totalDuration = $stats->total_duration ?? 0;
+            $totalCalls = $stats->total_calls ?? 0;
+            $incoming = $stats->incoming ?? 0;
+            $outgoing = $stats->outgoing ?? 0;
+            $missed = $stats->missed ?? 0;
+            $rejected = $stats->rejected ?? 0;
+            $totalDuration = $stats->total_duration ?? 0;
 
-        // Get average duration
-        $avgDuration = $totalCalls > 0 ? round($totalDuration / $totalCalls, 2) : 0;
+            // Get average duration
+            $avgDuration = $totalCalls > 0 ? round($totalDuration / $totalCalls, 2) : 0;
 
-        return response()->json([
-            'success' => true,
-            'data' => [
+            return [
                 'period' => $period,
                 'total_calls' => $totalCalls,
                 'incoming' => $incoming,
@@ -618,8 +630,42 @@ class CallLogController extends Controller
                 'rejected' => $rejected,
                 'total_duration' => $totalDuration,
                 'average_duration' => $avgDuration,
-            ],
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
         ], 200);
+    }
+
+    /**
+     * Generate cache key for statistics.
+     */
+    private function getStatisticsCacheKey($user, $period)
+    {
+        if ($user instanceof \App\Models\Admin) {
+            $userKey = 'admin_' . $user->id . '_' . $user->admin_role;
+            if ($user->branch_id) {
+                $userKey .= '_branch_' . $user->branch_id;
+            }
+        } else {
+            $userKey = 'user_' . $user->id;
+        }
+
+        return 'call_stats_' . $userKey . '_' . $period;
+    }
+
+    /**
+     * Invalidate statistics cache for a user.
+     */
+    private function invalidateStatisticsCache($user)
+    {
+        $periods = ['daily', 'weekly', 'monthly'];
+        foreach ($periods as $period) {
+            $cacheKey = $this->getStatisticsCacheKey($user, $period);
+            Cache::forget($cacheKey);
+        }
     }
 
     /**
@@ -692,22 +738,43 @@ class CallLogController extends Controller
             ->orderBy('call_timestamp', 'asc')
             ->first();
 
-        // Get full call history with this number for the user (with recordings)
-        // OPTIMIZED: Limit to 100 most recent calls to prevent memory issues
-        $callHistory = CallLog::where('user_id', $callLog->user_id)
-            ->where('caller_number', $callLog->caller_number)
-            ->with('recordings')
-            ->orderBy('call_timestamp', 'desc')
-            ->limit(100)
-            ->get();
+        // PERFORMANCE: Add pagination and conditional recording loading
+        $perPage = $request->get('per_page', 20);
+        $includeRecordings = $request->get('include_recordings', false);
 
-        // Calculate statistics
-        $totalCalls = $callHistory->count();
-        $incomingCount = $callHistory->where('call_type', 'incoming')->count();
-        $outgoingCount = $callHistory->where('call_type', 'outgoing')->count();
-        $missedCount = $callHistory->where('call_type', 'missed')->count();
-        $rejectedCount = $callHistory->where('call_type', 'rejected')->count();
-        $totalDuration = $callHistory->sum('call_duration');
+        // Get full call history with this number for the user
+        $callHistoryQuery = CallLog::where('user_id', $callLog->user_id)
+            ->where('caller_number', $callLog->caller_number)
+            ->orderBy('call_timestamp', 'desc');
+
+        // Only load recordings if explicitly requested
+        if ($includeRecordings) {
+            $callHistoryQuery->with('recordings');
+        } else {
+            $callHistoryQuery->withCount('recordings');
+        }
+
+        $callHistory = $callHistoryQuery->paginate($perPage);
+
+        // Calculate statistics from all records (not just paginated)
+        $statsQuery = CallLog::where('user_id', $callLog->user_id)
+            ->where('caller_number', $callLog->caller_number)
+            ->selectRaw('
+                COUNT(*) as total_calls,
+                SUM(CASE WHEN call_type = "incoming" THEN 1 ELSE 0 END) as incoming_count,
+                SUM(CASE WHEN call_type = "outgoing" THEN 1 ELSE 0 END) as outgoing_count,
+                SUM(CASE WHEN call_type = "missed" THEN 1 ELSE 0 END) as missed_count,
+                SUM(CASE WHEN call_type = "rejected" THEN 1 ELSE 0 END) as rejected_count,
+                SUM(call_duration) as total_duration
+            ')
+            ->first();
+
+        $totalCalls = $statsQuery->total_calls ?? 0;
+        $incomingCount = $statsQuery->incoming_count ?? 0;
+        $outgoingCount = $statsQuery->outgoing_count ?? 0;
+        $missedCount = $statsQuery->missed_count ?? 0;
+        $rejectedCount = $statsQuery->rejected_count ?? 0;
+        $totalDuration = $statsQuery->total_duration ?? 0;
 
         // Calculate callback time if there was a callback
         $callbackTimeSeconds = null;
@@ -747,7 +814,15 @@ class CallLogController extends Controller
             'data' => [
                 'original_call' => $callLog,
                 'next_outgoing_call' => $nextOutgoingCall,
-                'call_history' => $callHistory,
+                'call_history' => $callHistory->items(),
+                'pagination' => [
+                    'current_page' => $callHistory->currentPage(),
+                    'per_page' => $callHistory->perPage(),
+                    'total' => $callHistory->total(),
+                    'last_page' => $callHistory->lastPage(),
+                    'from' => $callHistory->firstItem(),
+                    'to' => $callHistory->lastItem(),
+                ],
                 'statistics' => [
                     'total_calls' => $totalCalls,
                     'incoming' => $incomingCount,

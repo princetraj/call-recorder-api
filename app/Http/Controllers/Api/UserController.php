@@ -41,11 +41,23 @@ class UserController extends Controller
             });
         }
 
-        $users = $query->orderBy('created_at', 'desc')->get();
+        // OPTIMIZED: Add pagination to prevent loading all users at once
+        $perPage = $request->get('per_page', 20);
+        $perPage = min($perPage, 100); // Max 100 per page
+
+        $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data' => $users
+            'data' => $users->items(),
+            'pagination' => [
+                'current_page' => $users->currentPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+                'last_page' => $users->lastPage(),
+                'from' => $users->firstItem(),
+                'to' => $users->lastItem(),
+            ],
         ]);
     }
 
@@ -95,7 +107,11 @@ class UserController extends Controller
      */
     public function show($id)
     {
-        $user = User::with(['branch', 'callLogs', 'devices'])->find($id);
+        // OPTIMIZED: Only load branch relationship, use counts for callLogs and devices
+        // to prevent loading thousands of records
+        $user = User::with(['branch'])
+            ->withCount(['callLogs', 'devices'])
+            ->find($id);
 
         if (!$user) {
             return response()->json([

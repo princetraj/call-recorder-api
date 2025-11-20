@@ -111,12 +111,15 @@ class CallLog extends Model
 
     /**
      * Scope to filter by branch ID.
+     * OPTIMIZED: Uses JOIN instead of whereHas to avoid N+1 subquery problem.
      */
     public function scopeByBranch($query, $branchId)
     {
-        return $query->whereHas('user', function ($q) use ($branchId) {
-            $q->where('branch_id', $branchId);
-        });
+        // Use JOIN instead of whereHas for better performance
+        // This prevents executing a subquery for each row
+        return $query->join('users', 'call_logs.user_id', '=', 'users.id')
+                     ->where('users.branch_id', $branchId)
+                     ->select('call_logs.*'); // Prevent duplicate columns from the JOIN
     }
 
     /**

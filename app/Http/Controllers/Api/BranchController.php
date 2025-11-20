@@ -16,7 +16,9 @@ class BranchController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Branch::with(['users', 'admins']);
+        // OPTIMIZED: Use withCount instead of loading all users and admins
+        // This prevents loading potentially hundreds of users/admins per branch
+        $query = Branch::withCount(['users', 'admins']);
 
         // Filter by status
         if ($request->has('status')) {
@@ -32,11 +34,23 @@ class BranchController extends Controller
             });
         }
 
-        $branches = $query->orderBy('created_at', 'desc')->get();
+        // OPTIMIZED: Add pagination to prevent loading all branches at once
+        $perPage = $request->get('per_page', 20);
+        $perPage = min($perPage, 100); // Max 100 per page
+
+        $branches = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data' => $branches
+            'data' => $branches->items(),
+            'pagination' => [
+                'current_page' => $branches->currentPage(),
+                'per_page' => $branches->perPage(),
+                'total' => $branches->total(),
+                'last_page' => $branches->lastPage(),
+                'from' => $branches->firstItem(),
+                'to' => $branches->lastItem(),
+            ],
         ]);
     }
 
@@ -80,7 +94,24 @@ class BranchController extends Controller
      */
     public function show($id)
     {
-        $branch = Branch::with(['users', 'admins'])->find($id);
+        // OPTIMIZED: Use withCount for better performance
+        // Load only basic user/admin info, not all related data
+        $branch = Branch::withCount(['users', 'admins'])
+            ->with([
+                'users' => function ($query) {
+                    // Limit to 50 most recent users to prevent loading hundreds
+                    $query->select('id', 'name', 'email', 'branch_id', 'status')
+                          ->orderBy('created_at', 'desc')
+                          ->limit(50);
+                },
+                'admins' => function ($query) {
+                    // Limit to 50 most recent admins
+                    $query->select('id', 'name', 'email', 'branch_id', 'admin_role', 'status')
+                          ->orderBy('created_at', 'desc')
+                          ->limit(50);
+                }
+            ])
+            ->find($id);
 
         if (!$branch) {
             return response()->json([

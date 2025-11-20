@@ -44,11 +44,23 @@ class AdminController extends Controller
             });
         }
 
-        $admins = $query->get();
+        // OPTIMIZED: Add pagination to prevent loading all admins at once
+        $perPage = $request->get('per_page', 20);
+        $perPage = min($perPage, 100); // Max 100 per page
+
+        $admins = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data' => $admins,
+            'data' => $admins->items(),
+            'pagination' => [
+                'current_page' => $admins->currentPage(),
+                'per_page' => $admins->perPage(),
+                'total' => $admins->total(),
+                'last_page' => $admins->lastPage(),
+                'from' => $admins->firstItem(),
+                'to' => $admins->lastItem(),
+            ],
         ], 200);
     }
 
